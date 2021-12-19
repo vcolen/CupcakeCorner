@@ -11,6 +11,8 @@ struct CheckoutView: View {
     @ObservedObject var order: Order
     @State private var confirmationMessage = ""
     @State private var showingConfirmation = false
+    @State private var showingConnectionError = false
+    @State private var errorDescription = ""
     
     var body: some View {
         ScrollView {
@@ -24,7 +26,7 @@ struct CheckoutView: View {
                 }
                 .frame(height: 233)
                 
-                Text("Your total is \(order.cost, format: .currency(code: "USD"))")
+                Text("Your total is \(order.order.cost, format: .currency(code: "USD"))")
                     .font(.title)
                 
                 Button("Place Order") {
@@ -40,11 +42,22 @@ struct CheckoutView: View {
         }  message: {
             Text(confirmationMessage)
         }
+        
+        .alert("Failed to complete delivery.", isPresented: $showingConnectionError) {
+            Button("ok") { }
+        } message: {
+            Text(errorDescription)
+        }
         .navigationTitle("Check out")
         .navigationBarTitleDisplayMode(.inline)
     }
+    
+    func showErrorMessage(error: Error) {
+        showingConnectionError = true
+    }
+    
     func placeOrder() async {
-        guard let encoder = try? JSONEncoder().encode(order) else {
+        guard let encoder = try? JSONEncoder().encode(order.order) else {
             print("Couldn't encode data")
             return
         }
@@ -57,11 +70,12 @@ struct CheckoutView: View {
         
         do {
             let (data, _) = try await URLSession.shared.upload(for: request, from: encoder)
-            let decodedOrder = try JSONDecoder().decode(Order.self, from: data)
-            confirmationMessage = "Your order for \(decodedOrder.quantity)X \(Order.types[decodedOrder.type].lowercased()) cupcakes is on it's way!"
+            let decodedOrder = try JSONDecoder().decode(OrderModel.self, from: data)
+            confirmationMessage = "Your order for \(decodedOrder.quantity)X \(OrderModel.types[decodedOrder.type].lowercased()) cupcakes is on it's way!"
             showingConfirmation = true
         } catch {
-            print("Checkout failed.")
+            errorDescription = error.localizedDescription
+            showingConnectionError = true
         }
     }
 }
